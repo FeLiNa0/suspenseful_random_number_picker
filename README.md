@@ -27,6 +27,10 @@ Run `make commitready` to format and lint the code.
 
 Use `make setup-with-pipenv` to setup development dependencies or install the dependencies in ./development_requirements.txt in your own way.
 
+Try to use the Python version specified in the .tool-versions file.
+
+<!-- TODO we may use tox to test on many other Python versions -->
+
 ## License
 
 The license for this project is in the LICENSE file.

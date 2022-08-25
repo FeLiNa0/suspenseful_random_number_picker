@@ -5,25 +5,65 @@ Author: Hugo O. Rivera Calzadillas
 Fall 2013
 Resizable, py2/3 compatible, cross platform.
 """
+import logging
 import sys
-import traceback
 from math import log
+from os.path import expanduser, join  # pylint: disable=no-name-in-module
 from random import choice
 
 # Try to maintain py3 compatibility
 if sys.version_info[0] <= 2:
     import Tkinter as tk
+    from ConfigParser import ConfigParser
 else:
     import tkinter as tk
+    from configparser import ConfigParser
+
+CONFIG_FILENAME = ".suspenseful_random_number_picker.ini"
+
+DEFAULT_MAIN_CONFIG = dict(
+    suspensefulness=3,
+    max_num=1000,
+    min_num=-1000,
+    step_num=1,
+)
+
+logging.basicConfig(format="%(asctime)-15s %(levelname)-6s %(message)s")
+logger = logging.getLogger("tcpserver")
+logger.setLevel(logging.DEBUG)
+
+
+def get_configuration_filepath():
+    return join(expanduser("~"), CONFIG_FILENAME)
+
+
+class MainConfig(
+    # Python 2 compatibility
+    object
+):  # pylint: disable=useless-object-inheritance
+    # Speed of shuffling , a lower value means numbers are unveiled faster
+    suspensefulness = DEFAULT_MAIN_CONFIG["suspensefulness"]
+    # These are the values passed to Python's range function
+    # Maximum random number minus 1 (exclusive upper bound)
+    max_num = DEFAULT_MAIN_CONFIG["max_num"]
+    # Minimum random number (inclusive lower bound)
+    min_num = DEFAULT_MAIN_CONFIG["min_num"]
+    # Gap between random numbers
+    step_num = DEFAULT_MAIN_CONFIG["step_num"]
+    always_configure_on_startup = True
+
+    def __setattr__(self, n, v):
+        logger.debug("Setting configuration %s %s", n, v)
+        # Python 2 compatibility
+        # pylint: disable=super-with-arguments
+        super(MainConfig, self).__setattr__(n, v)
 
 
 class Roulette_UI(tk.Tk):
-    def __init__(self, title, suspensefulness=5, master=None):
+    def __init__(self, title, master=None):
         """Create a tkinter window.
 
         title - displayed on the top of the tkinter window
-        suspensefulness - speed of shuffling
-            , a lower value means numbers are unveiled faster
         """
         # Initiate tkinter
         tk.Tk.__init__(self, master)
@@ -37,10 +77,9 @@ class Roulette_UI(tk.Tk):
             activeForeground="gray",
         )
         # Initial values.
-        self.suspensefulness = suspensefulness
-        self.num, self.max_num, self.min_num, self.step_num = 777, 1000, -1000, 1
-        self.range = list(range(self.min_num, self.max_num, self.step_num))
-        self.init_range = self.range
+        self.main_config = MainConfig()
+        self.num = self.main_config.min_num
+        self.range = self.make_range()
 
         self.f = tk.Frame(self, bg="white")
         self.f.pack(fill=tk.BOTH, expand=1)
@@ -54,23 +93,101 @@ class Roulette_UI(tk.Tk):
         self.button_fg = "#FF1717"
         self.button_bg = "#FFFFFF"
 
-    def check(self):
-        self.after(50, self.check)  # 50 stands for 50 ms.
+    def make_range(self):
+        return list(
+            range(
+                self.main_config.min_num,
+                self.main_config.max_num,
+                self.main_config.step_num,
+            )
+        )
+
+    def load_configuration(self):
+        # Load and convert values
+        # Check that all necessary keys are present in the loaded config
+        # Set configuration keys to default values if they are missing or not integers
+        logger.info("Loading configuration from %s", repr(get_configuration_filepath()))
+        defaults_loaded = False
+        config_object = ConfigParser()
+
+        try:
+            config_object.read(get_configuration_filepath())
+
+            # This code will raise an exception if a section is missing
+            main_config = {}
+            for key, default_value in DEFAULT_MAIN_CONFIG.items():
+                if config_object.has_option("main_config", key):
+                    main_config[key] = config_object.getint("main_config", key)
+                else:
+                    logger.info(
+                        "Configuration missing key %s, setting to default value %s",
+                        key,
+                        default_value,
+                    )
+                    main_config[key] = default_value
+        except Exception:  # pylint: disable=broad-except
+            logger.info(
+                "Configuration error encountered. Loading default configuration values.",
+                exc_info=True,
+            )
+            main_config = DEFAULT_MAIN_CONFIG
+            defaults_loaded = True
+
+        self.set_configuration_values(main_config)
+
+        self.write_configuration()
+        return defaults_loaded
+
+    def set_configuration_values(self, main_config):
+        main_config["max_num"] = max(main_config["max_num"], main_config["min_num"])
+        main_config["min_num"] = min(main_config["max_num"], main_config["min_num"])
+
+        self.main_config.suspensefulness = main_config["suspensefulness"]
+        self.main_config.max_num = main_config["max_num"]
+        self.main_config.min_num = main_config["min_num"]
+        self.main_config.step_num = main_config["step_num"]
+        self.range = self.make_range()
+
+    def write_configuration(self):
+        config_object = ConfigParser()
+        main_config = dict(
+            suspensefulness=str(self.main_config.suspensefulness),
+            max_num=str(self.main_config.max_num),
+            min_num=str(self.main_config.min_num),
+            step_num=str(self.main_config.step_num),
+        )
+        if not config_object.has_section("main_config"):
+            config_object.add_section("main_config")
+        for name, value in main_config.items():
+            config_object.set("main_config", name, value)
+        with open(get_configuration_filepath(), "w") as configfile:
+            logger.info("Saving configuration %s", main_config)
+            config_object.write(configfile)
+
+    def reset_configuration_and_show_random(self):
+        self.reset_configuration()
+        self.show_random()
+
+    def reset_configuration(self):
+        self.main_config = MainConfig()
+        self.write_configuration()
 
     def run(self):
         """First run. Start with the default range, ask for another range."""
         try:
-            self.range_ask()
-            self.num_ask()
-            self.roll_nums()
-            self.after(50, self.check)
+            defaults_loaded = self.load_configuration()
+            self.pick_random_number()
+            if defaults_loaded or self.main_config.always_configure_on_startup:
+                self.range_ask()
+                self.num_ask()
+            self.show_random()
             self.mainloop()
         except (SystemExit, KeyboardInterrupt):
             self.tk_quit()
         except Exception:  # pylint: disable=broad-except
-            print("Unknown exception occured!")
-            traceback.print_last()
+            logger.critical("Unexpected exception occured!", exc_info=True)
             self.tk_quit()
+            raise
 
     def _define_elements(self, frame):
         # Make a menu on the top bar with a single button that makes a dropdown menu
@@ -80,6 +197,11 @@ class Roulette_UI(tk.Tk):
         self.drop_menu.add_command(label="Change Range", command=self.range_ask)
         self.drop_menu.add_command(label="Picking speed", command=self.num_ask)
         self.drop_menu.add_command(label="About", command=self.show_about)
+        self.drop_menu.add_separator()
+        self.drop_menu.add_command(
+            label="Reset configuration",
+            command=self.reset_configuration_and_show_random,
+        )
         self.drop_menu.add_separator()
         self.drop_menu.add_command(label="Quit", command=self.tk_quit)
 
@@ -111,7 +233,7 @@ class Roulette_UI(tk.Tk):
 
     def tk_quit(self, event=None):
         """Close the entire window."""
-        print("Shutting down")
+        logger.info("SHUTTING DOWN")
         self.quit()
 
     def show_about(self):
@@ -123,9 +245,10 @@ class Roulette_UI(tk.Tk):
 
     def num_ask(self):
         question = "Please enter the desired coefficient for number selection\nA lower value means numbers are unveiled faster\nInteger >= 1"
-        n = Ask_Num_Dialog(self, question, self.suspensefulness)
+        n = Ask_Num_Dialog(self, question, self.main_config.suspensefulness)
         if n.result is not None:
-            self.suspensefulness = n.result
+            self.main_config.suspensefulness = n.result
+            self.write_configuration()
 
     def range_ask(self, question=None):
         """Ask for the desired range for random numbers."""
@@ -133,21 +256,36 @@ class Roulette_UI(tk.Tk):
             question = (
                 "Please enter the desired range \nand the step size for incrementing"
             )
-        d = Range_Dialog(self, question, (self.max_num, self.min_num, self.step_num))
-        if d.result is not None and len(d.result) == 3:
+        d = Range_Dialog(
+            self,
+            question,
+            (
+                self.main_config.min_num,
+                self.main_config.max_num,
+                self.main_config.step_num,
+            ),
+        )
+        if d.result is not None:
             res = d.result
 
-            self.step_num = res[2]
-            self.max_num = max(res[0], res[1])
-            self.min_num = min(res[0], res[1])
+            self.main_config.step_num = res[2]
+            self.main_config.max_num = max(res[0], res[1])
+            self.main_config.min_num = min(res[0], res[1])
+            self.range = self.make_range()
+            self.write_configuration()
 
-            self.range = list(range(self.min_num, self.max_num, self.step_num))
-        else:
-            self.range = self.init_range
+    def pick_random_number(self):
+        logger.debug(
+            "Picking random number out of range: %s %s %s",
+            min(self.range),
+            max(self.range),
+            self.main_config.step_num,
+        )
+        self.num = choice(self.range)
 
     def show_random(self):
         """Pick a new random number and start the picking animation."""
-        self.num = choice(self.range)
+        self.pick_random_number()
         self.callback_roll_nums()
 
     def roll_nums(self, event=None, time_per_place=5):
@@ -173,11 +311,14 @@ class Roulette_UI(tk.Tk):
             self.num_canvas_height = event.height
 
         # How many places? Make it an integer and give log a >0 value
-        mnum = max(abs(self.max_num), abs(self.min_num))
+        mnum = max(abs(self.main_config.max_num), abs(self.main_config.min_num))
         num_rects = int(log(mnum, 10)) + 1
 
         # Make space for the dash
-        if self.min_num < 0 and int(log(abs(self.min_num), 10)) + 1 >= num_rects:
+        if (
+            self.main_config.min_num < 0
+            and int(log(abs(self.main_config.min_num), 10)) + 1 >= num_rects
+        ):
             num_rects += 1
         num_range = list(range(num_rects))
 
@@ -267,7 +408,7 @@ class Roulette_UI(tk.Tk):
         # This runs roll_nums and asks it to take some time in displaying each decimal place
         # time in milliseconds
         self.num_canvas.delete(tk.ALL)
-        self.roll_nums(None, time_per_place=self.suspensefulness)
+        self.roll_nums(None, time_per_place=self.main_config.suspensefulness)
 
     def complementary_color(self, hex_string, max_places=6, prefix="#"):
         """Find the complementary color of a hex color string.
@@ -449,5 +590,5 @@ class Ask_Num_Dialog(Dialog):
 
 
 if __name__ == "__main__":
-    roulette_ui = Roulette_UI("SC Roulette", 3)
+    roulette_ui = Roulette_UI("SC Roulette")
     roulette_ui.run()

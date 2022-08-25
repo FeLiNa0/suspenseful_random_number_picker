@@ -3,10 +3,6 @@ PYFILES:=$(shell find . -iname \*.py)
 VERSION=src/powerflex_monitoring/VERSION
 TEST_CONTAINER_NAME=powerflex_monitoring_tests
 
-run:
-	# Try either python2 or python3
-	python ./SCC_roulette.py
-
 all: commitready
 
 commitready: format-fix lint
