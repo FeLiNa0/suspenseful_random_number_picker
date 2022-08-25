@@ -180,7 +180,8 @@ class Roulette_UI(tk.Tk):
             if defaults_loaded or self.main_config.always_configure_on_startup:
                 self.range_ask()
                 self.num_ask()
-            self.show_random()
+                # ONLY ROLL IF THERE WERE CHANGES
+                # self.show_random()
             self.mainloop()
         except (SystemExit, KeyboardInterrupt):
             self.tk_quit()
@@ -244,7 +245,7 @@ class Roulette_UI(tk.Tk):
         )
 
     def num_ask(self):
-        question = "Please enter the desired coefficient for number selection\nA lower value means numbers are unveiled faster\nInteger >= 1"
+        question = "Please enter the desired coefficient for number selection. A lower value means numbers are unveiled faster\nInteger >= 1"
         n = Ask_Num_Dialog(self, question, self.main_config.suspensefulness)
         if n.result is not None:
             self.main_config.suspensefulness = n.result
@@ -253,9 +254,7 @@ class Roulette_UI(tk.Tk):
     def range_ask(self, question=None):
         """Ask for the desired range for random numbers."""
         if question is None:
-            question = (
-                "Please enter the desired range \nand the step size for incrementing"
-            )
+            question = "Please enter the desired range and the step size for incrementing. The maximum range is exclusive."
         d = Range_Dialog(
             self,
             question,
@@ -518,8 +517,8 @@ class Range_Dialog(Dialog):
         # create dialog body.  return widget that should have
         # initial focus.
         if self.question:
-            q = tk.Label(master, text=self.question)
-            q.grid(row=0, columnspan=2)
+            q = tk.Label(master, text=self.question, wraplength=256)
+            q.grid(row=0, columnspan=3)
 
         tk.Label(master, text="Start:").grid(row=1)
         self.e_start = tk.Entry(master)
@@ -543,7 +542,7 @@ class Range_Dialog(Dialog):
         # get step!
         self.e_step = tk.Entry(master)
         self.e_step.insert(0, self.prev_range[2])
-        self.e_step.grid(row=3, column=3)
+        self.e_step.grid(row=3, column=2)
 
         return self.e_start  # initial focus.
 
@@ -571,7 +570,7 @@ class Ask_Num_Dialog(Dialog):
         # create dialog body.  return widget that should have
         # initial focus.
         if self.question:
-            q = tk.Label(master, text=self.question)
+            q = tk.Label(master, text=self.question, wraplength=256)
             q.grid(row=0, columnspan=2)
 
         tk.Label(master, text="Start:").grid(row=1)
