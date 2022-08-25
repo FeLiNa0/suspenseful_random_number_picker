@@ -1,7 +1,7 @@
 - TODO github actions for running code checks and tests
 - TODO screenshots in README
   - get the original red_button.ppm
-- TODO resizable window
+- DONE resizable window
 - TODO fix UI on i3 and other unusual window sizes
   - probably just need to take the font height into account
 - TODO add config file so you don't need to configure on every startup

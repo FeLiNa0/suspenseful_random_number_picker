@@ -27,6 +27,7 @@ class Roulette_UI(tk.Tk):
         """
         # Initiate tkinter
         tk.Tk.__init__(self, master)
+        self.resizable(height=True, width=True)
         self.title(title)
 
         self.tk_setPalette(
