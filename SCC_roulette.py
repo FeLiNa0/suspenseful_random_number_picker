@@ -26,6 +26,7 @@ DEFAULT_MAIN_CONFIG = dict(
     max_num=1000,
     min_num=-1000,
     step_num=1,
+    always_configure_on_startup=True,
 )
 
 logging.basicConfig(format="%(asctime)-15s %(levelname)-6s %(message)s")
@@ -50,7 +51,7 @@ class MainConfig(
     min_num = DEFAULT_MAIN_CONFIG["min_num"]
     # Gap between random numbers
     step_num = DEFAULT_MAIN_CONFIG["step_num"]
-    always_configure_on_startup = True
+    always_configure_on_startup = DEFAULT_MAIN_CONFIG["always_configure_on_startup"]
 
     def __setattr__(self, n, v):
         logger.debug("Setting configuration %s %s", n, v)
@@ -76,8 +77,12 @@ class Roulette_UI(tk.Tk):
             activeBackground="white",
             activeForeground="gray",
         )
-        # Initial values.
+        # Initial configuration values.
+        # Avoid reading or writing to the configuration in the __init__ to make
+        # unit testing and REPL stuff easier.
         self.main_config = MainConfig()
+        # We'll likely never use this non-random number, but this attribute
+        # must be initialized
         self.num = self.main_config.min_num
         self.range = self.make_range()
 
@@ -85,6 +90,7 @@ class Roulette_UI(tk.Tk):
         self.f.pack(fill=tk.BOTH, expand=1)
         self._define_elements(self.f)
 
+        # Handle various types of exit events
         self.protocol("WM_DELETE_WINDOW", self.tk_quit)
         self.bind("<Escape>", self.tk_quit)
         self.bind("<Control-c>", self.tk_quit)
@@ -117,7 +123,10 @@ class Roulette_UI(tk.Tk):
             main_config = {}
             for key, default_value in DEFAULT_MAIN_CONFIG.items():
                 if config_object.has_option("main_config", key):
-                    main_config[key] = config_object.getint("main_config", key)
+                    if key == "always_configure_on_startup":
+                        main_config[key] = config_object.getboolean("main_config", key)
+                    else:
+                        main_config[key] = config_object.getint("main_config", key)
                 else:
                     logger.info(
                         "Configuration missing key %s, setting to default value %s",
@@ -138,15 +147,30 @@ class Roulette_UI(tk.Tk):
         self.write_configuration()
         return defaults_loaded
 
-    def set_configuration_values(self, main_config):
-        main_config["max_num"] = max(main_config["max_num"], main_config["min_num"])
-        main_config["min_num"] = min(main_config["max_num"], main_config["min_num"])
+    def set_configuration_values(self, main_config=None):
+        if main_config is None:
+            self.main_config = MainConfig()
+        else:
+            self.main_config.suspensefulness = main_config["suspensefulness"]
+            self.main_config.max_num = main_config["max_num"]
+            self.main_config.min_num = main_config["min_num"]
+            self.main_config.step_num = main_config["step_num"]
+            self.main_config.always_configure_on_startup = main_config[
+                "always_configure_on_startup"
+            ]
 
-        self.main_config.suspensefulness = main_config["suspensefulness"]
-        self.main_config.max_num = main_config["max_num"]
-        self.main_config.min_num = main_config["min_num"]
-        self.main_config.step_num = main_config["step_num"]
+        self.main_config.max_num = max(
+            self.main_config.max_num, self.main_config.min_num
+        )
+        self.main_config.min_num = min(
+            self.main_config.max_num, self.main_config.min_num
+        )
+
         self.range = self.make_range()
+
+        self.user_wants_always_configure_on_startup.set(
+            int(self.main_config.always_configure_on_startup)
+        )
 
     def write_configuration(self):
         config_object = ConfigParser()
@@ -155,6 +179,9 @@ class Roulette_UI(tk.Tk):
             max_num=str(self.main_config.max_num),
             min_num=str(self.main_config.min_num),
             step_num=str(self.main_config.step_num),
+            always_configure_on_startup=str(
+                self.main_config.always_configure_on_startup
+            ),
         )
         if not config_object.has_section("main_config"):
             config_object.add_section("main_config")
@@ -169,7 +196,7 @@ class Roulette_UI(tk.Tk):
         self.show_random()
 
     def reset_configuration(self):
-        self.main_config = MainConfig()
+        self.set_configuration_values()
         self.write_configuration()
 
     def run(self):
@@ -190,6 +217,12 @@ class Roulette_UI(tk.Tk):
             self.tk_quit()
             raise
 
+    def set_always_configure_on_startup(self):
+        self.main_config.always_configure_on_startup = bool(
+            self.user_wants_always_configure_on_startup.get()
+        )
+        self.write_configuration()
+
     def _define_elements(self, frame):
         # Make a menu on the top bar with a single button that makes a dropdown menu
         self.top_menu = tk.Menu(frame)
@@ -199,6 +232,15 @@ class Roulette_UI(tk.Tk):
         self.drop_menu.add_command(label="Picking speed", command=self.num_ask)
         self.drop_menu.add_command(label="About", command=self.show_about)
         self.drop_menu.add_separator()
+
+        # Thanks, Shipman
+        # https://tkdocs.com/shipman/checkbutton.html
+        self.user_wants_always_configure_on_startup = tk.IntVar(self)
+        self.drop_menu.add_checkbutton(
+            label="Always ask on startup?",
+            variable=self.user_wants_always_configure_on_startup,
+            command=self.set_always_configure_on_startup,
+        )
         self.drop_menu.add_command(
             label="Reset configuration",
             command=self.reset_configuration_and_show_random,
