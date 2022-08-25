@@ -98,6 +98,7 @@ class Roulette_UI(tk.Tk):
         self.bind("<KeyRelease-space>", self.show_random)
         self.bind("<KeyRelease-Return>", self.show_random)
         self.bind("<KeyRelease-KP_Enter>", self.show_random)
+        self.bind("<KeyRelease-F1>", self.show_help)
 
         # Used to calculate a nice color scheme.
         self.button_fg = "#FF1717"
@@ -234,7 +235,6 @@ class Roulette_UI(tk.Tk):
         self.drop_menu = tk.Menu(frame, tearoff=0)
         self.drop_menu.add_command(label="Change Range", command=self.range_ask)
         self.drop_menu.add_command(label="Picking speed", command=self.num_ask)
-        self.drop_menu.add_command(label="About", command=self.show_about)
         self.drop_menu.add_separator()
 
         # Thanks, Shipman
@@ -249,6 +249,9 @@ class Roulette_UI(tk.Tk):
             label="Reset configuration",
             command=self.reset_configuration_and_show_random,
         )
+        self.drop_menu.add_separator()
+        self.drop_menu.add_command(label="Help", command=self.show_help)
+        self.drop_menu.add_command(label="About", command=self.show_about)
         self.drop_menu.add_separator()
         self.drop_menu.add_command(label="Quit", command=self.tk_quit)
 
@@ -288,6 +291,15 @@ class Roulette_UI(tk.Tk):
             self,
             "About",
             "A suspenseful random number picker.\nHugo O. Rivera Calzadillas 2013\nhttps://github.com/roguh/suspenseful_random_number_picker",
+        )
+
+    def show_help(self, event=None):
+        Message(
+            self,
+            "Help",
+            "This tool will select a random integer between the selected minimum and the selected maximum minus one, in steps of 1 or of a given number.\n"
+            "Configuration is saved in an INI file and can be reset via the menu. It is saved whenever you make any changes to the program's parameters. Check the file %s if you want to see the configuration."
+            % get_configuration_filepath(),
         )
 
     def num_ask(self):
@@ -541,7 +553,7 @@ class Message(Dialog):
     def buttonbox(self):
         box = tk.Frame(self)
 
-        l = tk.Label(box, text=self.message)
+        l = tk.Label(box, text=self.message, wraplength=512)
         l.pack(padx=16, pady=16)
 
         w = tk.Button(box, text="OK", width=10, command=self.ok, default=tk.ACTIVE)
