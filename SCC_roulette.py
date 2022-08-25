@@ -94,6 +94,10 @@ class Roulette_UI(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.tk_quit)
         self.bind("<Escape>", self.tk_quit)
         self.bind("<Control-c>", self.tk_quit)
+        # https://tkdocs.com/shipman/key-names.html
+        self.bind("<KeyRelease-space>", self.show_random)
+        self.bind("<KeyRelease-Return>", self.show_random)
+        self.bind("<KeyRelease-KP_Enter>", self.show_random)
 
         # Used to calculate a nice color scheme.
         self.button_fg = "#FF1717"
@@ -324,7 +328,7 @@ class Roulette_UI(tk.Tk):
         )
         self.num = choice(self.range)
 
-    def show_random(self):
+    def show_random(self, event=None):
         """Pick a new random number and start the picking animation."""
         self.pick_random_number()
         self.callback_roll_nums()
