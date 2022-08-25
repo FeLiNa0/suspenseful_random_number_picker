@@ -412,7 +412,7 @@ class Roulette_UI(tk.Tk):
             ns = "-" + ns[1:]
 
         # Pick a font size
-        fontsize = -self.num_canvas_width / 2.5
+        fontsize = -self.num_canvas_width / 3
         font = ("Helvetica", int(fontsize))
 
         # Draw a character on the ith rectangle
