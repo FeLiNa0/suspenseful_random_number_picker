@@ -7,10 +7,17 @@ Resizable, py2/3 compatible, cross platform.
 """
 import logging
 import sys
+import time
+import wave
 import webbrowser
 from math import log
 from os.path import expanduser, join  # pylint: disable=no-name-in-module
 from random import choice
+
+try:
+    import pyaudio
+except ImportError:
+    pyaudio = None
 
 # Try to maintain py3 compatibility
 if sys.version_info[0] <= 2:
@@ -23,6 +30,9 @@ else:
 PROJECT_URL = "https://github.com/roguh/suspenseful_random_number_picker"
 
 CONFIG_FILENAME = ".suspenseful_random_number_picker.ini"
+WAV_SOUND_EFFECT_FILENAMES = {"tada": "./476340__nolhananas__tada.wav"}
+
+SHOW_RANDOM_DEBOUNCE_TIME_SEC = 0.5
 
 DEFAULT_MAIN_CONFIG = dict(
     suspensefulness=3,
@@ -30,7 +40,9 @@ DEFAULT_MAIN_CONFIG = dict(
     min_num=-1000,
     step_num=1,
     always_configure_on_startup=True,
+    play_sound_effect=False,
 )
+BOOLEAN_CONFIGURATION_KEYS = ["always_configure_on_startup", "play_sound_effect"]
 
 logging.basicConfig(format="%(asctime)-15s %(levelname)-6s %(message)s")
 logger = logging.getLogger("tcpserver")
@@ -55,12 +67,74 @@ class MainConfig(
     # Gap between random numbers
     step_num = DEFAULT_MAIN_CONFIG["step_num"]
     always_configure_on_startup = DEFAULT_MAIN_CONFIG["always_configure_on_startup"]
+    play_sound_effect = DEFAULT_MAIN_CONFIG["play_sound_effect"]
 
     def __setattr__(self, n, v):
         logger.debug("Setting configuration %s %s", n, v)
         # Python 2 compatibility
         # pylint: disable=super-with-arguments
         super(MainConfig, self).__setattr__(n, v)
+
+
+class AudioPlayer:
+    def __init__(self):
+        self.pyaudio = None
+        self.wavefiles = {}
+        self.pyaudio_stream = None
+
+    def initialize_pyaudio(self):
+        if pyaudio is not None:
+            logger.info("Enabling audio")
+            self.pyaudio = pyaudio.PyAudio()
+        else:
+            logger.warning("Unable to import the pyaudio library. Audio is disabled!")
+
+    def get_pyaudio_callback(self, audioname):
+        def callback(in_data, frame_count, time_info, status):
+            if pyaudio is None:
+                return (None, 0)
+            data = self.wavefiles[audioname].readframes(frame_count)
+            return (data, pyaudio.paContinue)
+
+        return callback
+
+    def stop_pyaudio_stream(self):
+        if self.pyaudio_stream is not None:
+            self.pyaudio_stream.stop_stream()
+            self.pyaudio_stream.close()
+            self.pyaudio_stream = None
+
+        for wavefile in self.wavefiles.values():
+            wavefile.close()
+        self.wavefiles = {}
+
+    def play_sound(self, audioname):
+        if self.pyaudio is None:
+            return
+
+        self.stop_pyaudio_stream()
+        if audioname in self.wavefiles:
+            self.wavefiles[audioname].close()
+
+        self.wavefiles[audioname] = wave.open(
+            WAV_SOUND_EFFECT_FILENAMES[audioname], "rb"
+        )
+
+        self.pyaudio_stream = self.pyaudio.open(
+            format=self.pyaudio.get_format_from_width(
+                self.wavefiles[audioname].getsampwidth()
+            ),
+            channels=self.wavefiles[audioname].getnchannels(),
+            rate=self.wavefiles[audioname].getframerate(),
+            output=True,
+            stream_callback=self.get_pyaudio_callback(audioname),
+        )
+
+        self.pyaudio_stream.start_stream()
+
+    def terminate(self):
+        if self.pyaudio:
+            self.pyaudio.terminate()
 
 
 class Roulette_UI(tk.Tk):
@@ -107,6 +181,9 @@ class Roulette_UI(tk.Tk):
         self.button_fg = "#FF1717"
         self.button_bg = "#FFFFFF"
 
+        self.last_show_random_time = 0
+        self.audio_player = AudioPlayer()
+
     def make_range(self):
         return list(
             range(
@@ -131,7 +208,7 @@ class Roulette_UI(tk.Tk):
             main_config = {}
             for key, default_value in DEFAULT_MAIN_CONFIG.items():
                 if config_object.has_option("main_config", key):
-                    if key == "always_configure_on_startup":
+                    if key in BOOLEAN_CONFIGURATION_KEYS:
                         main_config[key] = config_object.getboolean("main_config", key)
                     else:
                         main_config[key] = config_object.getint("main_config", key)
@@ -166,6 +243,7 @@ class Roulette_UI(tk.Tk):
             self.main_config.always_configure_on_startup = main_config[
                 "always_configure_on_startup"
             ]
+            self.main_config.play_sound_effect = main_config["play_sound_effect"]
 
         self.main_config.max_num = max(
             self.main_config.max_num, self.main_config.min_num
@@ -179,6 +257,7 @@ class Roulette_UI(tk.Tk):
         self.user_wants_always_configure_on_startup.set(
             int(self.main_config.always_configure_on_startup)
         )
+        self.user_wants_play_sound_effect.set(int(self.main_config.play_sound_effect))
 
     def write_configuration(self):
         config_object = ConfigParser()
@@ -190,6 +269,7 @@ class Roulette_UI(tk.Tk):
             always_configure_on_startup=str(
                 self.main_config.always_configure_on_startup
             ),
+            play_sound_effect=str(self.main_config.play_sound_effect),
         )
         if not config_object.has_section("main_config"):
             config_object.add_section("main_config")
@@ -217,6 +297,7 @@ class Roulette_UI(tk.Tk):
                 self.num_ask()
                 # ONLY ROLL IF THERE WERE CHANGES
                 # self.show_random()
+            self.audio_player.initialize_pyaudio()
             self.mainloop()
         except (SystemExit, KeyboardInterrupt):
             self.tk_quit()
@@ -230,6 +311,14 @@ class Roulette_UI(tk.Tk):
             self.user_wants_always_configure_on_startup.get()
         )
         self.write_configuration()
+
+    def set_play_sound_effect(self):
+        self.main_config.play_sound_effect = bool(
+            self.user_wants_play_sound_effect.get()
+        )
+        self.write_configuration()
+        if self.main_config.play_sound_effect:
+            self.audio_player.play_sound("tada")
 
     def _define_elements(self, frame):
         # Make a menu on the top bar with a single button that makes a dropdown menu
@@ -247,6 +336,12 @@ class Roulette_UI(tk.Tk):
             label="Always ask on startup?",
             variable=self.user_wants_always_configure_on_startup,
             command=self.set_always_configure_on_startup,
+        )
+        self.user_wants_play_sound_effect = tk.IntVar(self)
+        self.drop_menu.add_checkbutton(
+            label="Play sound effect?",
+            variable=self.user_wants_play_sound_effect,
+            command=self.set_play_sound_effect,
         )
         self.drop_menu.add_command(
             label="Reset configuration",
@@ -287,6 +382,10 @@ class Roulette_UI(tk.Tk):
     def tk_quit(self, event=None):
         """Close the entire window."""
         logger.info("SHUTTING DOWN")
+
+        self.audio_player.stop_pyaudio_stream()
+        self.audio_player.terminate()
+
         self.quit()
 
     def show_about(self):
@@ -347,8 +446,23 @@ class Roulette_UI(tk.Tk):
 
     def show_random(self, event=None):
         """Pick a new random number and start the picking animation."""
+        duration_since_last_show_random = time.time() - self.last_show_random_time
+        if duration_since_last_show_random < SHOW_RANDOM_DEBOUNCE_TIME_SEC:
+            logger.debug(
+                "Debouncing show_random for %s more seconds to avoid excessive tkinter/pyaudio events",
+                duration_since_last_show_random,
+            )
+            return
         self.pick_random_number()
         self.callback_roll_nums()
+        self.last_show_random_time = time.time()
+
+    def on_single_digit_selected(self, char, index, digit, digits):
+        logger.debug("clank! %s", char)
+        if index == 0:
+            logger.debug("DING! %s", char)
+            if self.main_config.play_sound_effect:
+                self.audio_player.play_sound("tada")
 
     def roll_nums(self, event=None, time_per_place=5):
         """Unveil the numbers using the canvas at a pace of time_per_place.
@@ -421,7 +535,7 @@ class Roulette_UI(tk.Tk):
         font = ("Helvetica", int(fontsize))
 
         # Draw a character on the ith rectangle
-        def draw_char(i, char="7", delete_after=-1):
+        def draw_char(index, i, char="7", delete_after=-1, final=False):
             # center the number
             x1, y1 = i * rect_w + rect_ox, rect_h + rect_oy
 
@@ -435,13 +549,16 @@ class Roulette_UI(tk.Tk):
                 self.canvas_queue.append(timed)
             self.canvas_digits.append(txt)
 
+            if final:
+                self.on_single_digit_selected(char, index, i, num_range)
+
         # Start with the most significant place first
         num_range.reverse()
 
         # The time interval
         # Use tkinter's after() queue to make the numbers whiz by cool.
         del_time = time_per_place * 5
-        for i in num_range:
+        for index, i in enumerate(num_range):
             # Loop from 0 to 9 'count' times
             count = (i + 1) * 3 + int(time_per_place / 2)
             cc = ns[i]
@@ -456,13 +573,15 @@ class Roulette_UI(tk.Tk):
                 # Callback = draw the countdown number
 
                 timed = self.num_canvas.after(
-                    del_time * count, draw_char, i, str(j), del_time
+                    del_time * count, draw_char, index, i, str(j), del_time, False
                 )
                 self.canvas_queue.append(timed)
                 count += 1
 
             # Draw the picked number
-            timed = self.num_canvas.after(count * del_time, draw_char, i, cc)
+            timed = self.num_canvas.after(
+                count * del_time, draw_char, index, i, cc, -1, True
+            )
             self.canvas_queue.append(timed)
 
     def callback_roll_nums(self):

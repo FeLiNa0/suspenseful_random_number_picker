@@ -1,4 +1,3 @@
-- TODO github actions for running code checks and tests
 - TODO screenshots in README
   - get the original red_button.ppm
 - DONE resizable window
@@ -7,9 +6,11 @@
 - DONE add config file so you don't need to configure on every startup
   - make it clear where the file is
   - make it easy to modify or delete the persistent config via the UI
+- DONE add sound effect
+- DONE debounce showrandom to avoid bug by zealous clickers
+- TODO work with very large numbers
+- TODO work with lower values of suspense
+- TODO github actions for running code checks and tests
 - TODO automated testing 
 - TODO test on many Python versions with tox
 - TODO test on python 2.7
-- TODO add sound effect
-- TODO work with very large numbers
-- TODO work with lower values of suspense

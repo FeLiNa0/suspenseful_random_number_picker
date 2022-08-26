@@ -34,3 +34,7 @@ Try to use the Python version specified in the .tool-versions file.
 ## License
 
 The license for this project is in the LICENSE file.
+
+## Credits
+
+`"tada"` sound comes from: https://freesound.org/people/nolhananas/sounds/476340/
