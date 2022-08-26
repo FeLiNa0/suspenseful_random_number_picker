@@ -13,7 +13,7 @@ import webbrowser
 from math import log
 
 # pylint: disable=no-name-in-module
-from os.path import dirname, expanduser, join
+from os.path import dirname, expanduser, join, realpath
 from random import choice
 
 try:
@@ -33,7 +33,7 @@ PROJECT_URL = "https://github.com/roguh/suspenseful_random_number_picker"
 
 
 def absolutepath(path):
-    return join(dirname(__file__), path)
+    return join(dirname(realpath(__file__)), path)
 
 
 CONFIG_FILENAME = ".suspenseful_random_number_picker.ini"
