@@ -40,7 +40,7 @@ DEFAULT_MAIN_CONFIG = dict(
     min_num=-1000,
     step_num=1,
     always_configure_on_startup=True,
-    play_sound_effect=False,
+    play_sound_effect=True,
 )
 BOOLEAN_CONFIGURATION_KEYS = ["always_configure_on_startup", "play_sound_effect"]
 
