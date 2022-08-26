@@ -14,3 +14,4 @@
 - TODO automated testing 
 - TODO test on many Python versions with tox
 - TODO test on python 2.7
+- TODO allow running this program from any PWD (use absolute paths for getting resources)

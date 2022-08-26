@@ -7,6 +7,8 @@ Suspensful random number picker created for the New Mexico Supercomputing Challe
 This program only uses the Python standard library.
 No external dependencies are necessary, besides a Python installation.
 
+If you install the `pyaudio` Python library, this program can play sound.
+
 Try any of:
 
 ```
@@ -20,6 +22,17 @@ python3 ./SCC_roulette.py
 ```
 python2 ./SCC_roulette.py
 ```
+
+### Features
+
+- Press space, enter, or click the button to pick a random number
+- All options configurable through the dropdown menu 
+- Configuration is saved to a file
+- Optional sound effect
+
+![A screenshot of the program displaying a number](./77777.png)
+
+![A screenshot of various parts of the program](./demo.png)
 
 ## Developing
 
