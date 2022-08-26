@@ -11,7 +11,9 @@ import time
 import wave
 import webbrowser
 from math import log
-from os.path import expanduser, join  # pylint: disable=no-name-in-module
+
+# pylint: disable=no-name-in-module
+from os.path import dirname, expanduser, join
 from random import choice
 
 try:
@@ -29,8 +31,14 @@ else:
 
 PROJECT_URL = "https://github.com/roguh/suspenseful_random_number_picker"
 
+
+def absolutepath(path):
+    return join(dirname(__file__), path)
+
+
 CONFIG_FILENAME = ".suspenseful_random_number_picker.ini"
-WAV_SOUND_EFFECT_FILENAMES = {"tada": "./476340__nolhananas__tada.wav"}
+BUTTON_FILENAME = absolutepath("red_button.ppm")
+WAV_SOUND_EFFECT_FILENAMES = {"tada": absolutepath("476340__nolhananas__tada.wav")}
 
 SHOW_RANDOM_DEBOUNCE_TIME_SEC = 0.5
 
@@ -116,9 +124,12 @@ class AudioPlayer:
         if audioname in self.wavefiles:
             self.wavefiles[audioname].close()
 
-        self.wavefiles[audioname] = wave.open(
-            WAV_SOUND_EFFECT_FILENAMES[audioname], "rb"
-        )
+        filename = WAV_SOUND_EFFECT_FILENAMES[audioname]
+        try:
+            self.wavefiles[audioname] = wave.open(filename, "rb")
+        except OSError:
+            logger.warning("Could not open sound file %s", filename, exc_info=True)
+            return
 
         self.pyaudio_stream = self.pyaudio.open(
             format=self.pyaudio.get_format_from_width(
@@ -373,11 +384,24 @@ class Roulette_UI(tk.Tk):
         self.canvas_queue = []
 
         # Create button to start shuffling
-        self.but_image = tk.PhotoImage(file="red_button.ppm")
+        try:
+            with open(BUTTON_FILENAME, "rb") as buttonfile:
+                self.but_image = tk.PhotoImage(
+                    name=BUTTON_FILENAME, data=buttonfile.read()
+                )
+        except OSError:
+            logger.warning(
+                "Could not open button file %s", BUTTON_FILENAME, exc_info=True
+            )
+            self.but_image = None
+
         self.but_go = tk.Button(
-            frame, text="GET", image=self.but_image, command=self.show_random
+            frame,
+            text="GET",
+            image=self.but_image,
+            command=self.show_random,
         )
-        self.but_go.pack()
+        self.but_go.pack(expand=False)
 
     def tk_quit(self, event=None):
         """Close the entire window."""
