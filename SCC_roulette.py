@@ -7,6 +7,7 @@ Resizable, py2/3 compatible, cross platform.
 """
 import logging
 import sys
+import webbrowser
 from math import log
 from os.path import expanduser, join  # pylint: disable=no-name-in-module
 from random import choice
@@ -18,6 +19,8 @@ if sys.version_info[0] <= 2:
 else:
     import tkinter as tk
     from configparser import ConfigParser
+
+PROJECT_URL = "https://github.com/roguh/suspenseful_random_number_picker"
 
 CONFIG_FILENAME = ".suspenseful_random_number_picker.ini"
 
@@ -290,14 +293,16 @@ class Roulette_UI(tk.Tk):
         Message(
             self,
             "About",
-            "A suspenseful random number picker.\nHugo O. Rivera Calzadillas 2013\nhttps://github.com/roguh/suspenseful_random_number_picker",
+            "A suspenseful random number picker.\nHugo O. Rivera Calzadillas 2013",
+            url=PROJECT_URL,
         )
 
     def show_help(self, event=None):
         Message(
             self,
             "Help",
-            "This tool will select a random integer between the selected minimum and the selected maximum minus one, in steps of 1 or of a given number.\n"
+            "To draw a new random number: press ENTER or SPACE, or click the button below the numbers.\n\n"
+            "This tool will select a random integer between the selected minimum and the selected maximum minus one, in steps of 1 or of a given number.\n\n"
             "Configuration is saved in an INI file and can be reset via the menu. It is saved whenever you make any changes to the program's parameters. Check the file %s if you want to see the configuration."
             % get_configuration_filepath(),
         )
@@ -546,15 +551,32 @@ class Dialog(tk.Toplevel):
 
 
 class Message(Dialog):
-    def __init__(self, parent, title=None, message=None):
+    def __init__(self, parent, title=None, message=None, url=None):
         self.message = message
+        self.url = url
         Dialog.__init__(self, parent, title)
+
+    def open_url(self, event=None):
+        webbrowser.open(self.url)
 
     def buttonbox(self):
         box = tk.Frame(self)
 
-        l = tk.Label(box, text=self.message, wraplength=512)
+        l = tk.Label(box, text=self.message, wraplength=512, justify="left")
         l.pack(padx=16, pady=16)
+
+        if self.url is not None:
+            self.url_label = tk.Label(
+                box,
+                text=self.url,
+                wraplength=512,
+                justify="left",
+                fg="blue",
+                cursor="hand2",
+                underline=True,
+            )
+            self.url_label.pack(padx=16, pady=8)
+            self.url_label.bind("<ButtonRelease-1>", self.open_url)
 
         w = tk.Button(box, text="OK", width=10, command=self.ok, default=tk.ACTIVE)
         w.pack(side=tk.BOTTOM, padx=5, pady=5)
