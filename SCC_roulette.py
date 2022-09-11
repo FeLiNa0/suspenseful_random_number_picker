@@ -71,6 +71,7 @@ def get_configuration_filepath():
 
 def subprocess_run(command):
     logger.info("Running shell command: %s", command)
+    # pylint: disable=consider-using-with
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
     )
@@ -797,7 +798,7 @@ class Range_Dialog(Dialog):
 
             try:
                 step = int(self.e_step.get())
-            except (ValueError, TypeError) as exc:
+            except (ValueError, TypeError):
                 logger.info(
                     "Setting step to 1. Couldn't convert e_step to int", exc_info=True
                 )
