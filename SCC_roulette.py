@@ -6,6 +6,9 @@ Fall 2013
 Resizable, py2/3 compatible, cross platform.
 """
 import logging
+import os
+import platform
+import subprocess
 import sys
 import time
 import wave
@@ -13,7 +16,7 @@ import webbrowser
 from math import log
 
 # pylint: disable=no-name-in-module
-from os.path import dirname, expanduser, join, realpath
+from os.path import dirname, exists, expanduser, join, realpath
 from random import choice
 
 try:
@@ -42,6 +45,8 @@ WAV_SOUND_EFFECT_FILENAMES = {"tada": absolutepath("476340__nolhananas__tada.wav
 
 SHOW_RANDOM_DEBOUNCE_TIME_SEC = 0.5
 
+IS_WINDOWS = os.name == "nt"
+
 DEFAULT_MAIN_CONFIG = dict(
     suspensefulness=3,
     max_num=1000,
@@ -53,12 +58,27 @@ DEFAULT_MAIN_CONFIG = dict(
 BOOLEAN_CONFIGURATION_KEYS = ["always_configure_on_startup", "play_sound_effect"]
 
 logging.basicConfig(format="%(asctime)-15s %(levelname)-6s %(message)s")
-logger = logging.getLogger("tcpserver")
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG")
+logger.setLevel(LOG_LEVEL)
+logger.info("Set environment variable configuration: LOG_LEVEL=%s", LOG_LEVEL)
 
 
 def get_configuration_filepath():
     return join(expanduser("~"), CONFIG_FILENAME)
+
+
+def subprocess_run(command):
+    logger.info("Running shell command: %s", command)
+    process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    )
+    process.wait()
+    output = process.communicate()[0]
+    logger.debug(
+        "Ran shell command %s, return code=%s: %s", command, process.returncode, output
+    )
 
 
 class MainConfig(
@@ -286,9 +306,19 @@ class Roulette_UI(tk.Tk):
             config_object.add_section("main_config")
         for name, value in main_config.items():
             config_object.set("main_config", name, value)
-        with open(get_configuration_filepath(), "w") as configfile:
-            logger.info("Saving configuration %s", main_config)
-            config_object.write(configfile)
+
+        try:
+            if exists(get_configuration_filepath()) and IS_WINDOWS:
+                subprocess_run(["attrib", "-h", get_configuration_filepath()])
+
+            with open(get_configuration_filepath(), "w") as configfile:
+                logger.info("Saving configuration %s", main_config)
+                config_object.write(configfile)
+
+            if exists(get_configuration_filepath()) and IS_WINDOWS:
+                subprocess_run(["attrib", "+h", get_configuration_filepath()])
+        except Exception:  # pylint: disable=broad-except
+            logger.error("Configuration file writing failed", exc_info=True)
 
     def reset_configuration_and_show_random(self):
         self.reset_configuration()
@@ -753,19 +783,10 @@ class Range_Dialog(Dialog):
         self.e_end.insert(0, self.prev_range[1])
         self.e_end.grid(row=2, column=1)
 
-        # tkinter variable
-        self.user_wants_step = tk.IntVar()
-
-        # want step?
-        self.cb = tk.Checkbutton(master, text="Step?", variable=self.user_wants_step)
-        self.cb.grid(row=3, sticky=tk.W)
-        if self.prev_range[2] != 1:
-            self.user_wants_step.set(1)
-
-        # get step!
+        tk.Label(master, text="Step:").grid(row=3)
         self.e_step = tk.Entry(master)
         self.e_step.insert(0, self.prev_range[2])
-        self.e_step.grid(row=3, column=2)
+        self.e_step.grid(row=3, column=1)
 
         return self.e_start  # initial focus.
 
@@ -774,9 +795,12 @@ class Range_Dialog(Dialog):
             start = int(self.e_start.get())
             end = int(self.e_end.get())
 
-            if self.user_wants_step.get() == 1:
+            try:
                 step = int(self.e_step.get())
-            else:
+            except (ValueError, TypeError) as exc:
+                logger.info(
+                    "Setting step to 1. Couldn't convert e_step to int", exc_info=True
+                )
                 step = 1
             self.result = start, end, step
         except:  # pylint: disable=bare-except
@@ -812,5 +836,7 @@ class Ask_Num_Dialog(Dialog):
 
 
 if __name__ == "__main__":
+    logger.info("System information (uname): %s", platform.uname())
+    logger.info("Python version: %s", sys.version)
     roulette_ui = Roulette_UI("SC Roulette")
     roulette_ui.run()

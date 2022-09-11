@@ -18,3 +18,9 @@
 - DONE handle missing resources
   - DONE handle pyaudio not installed
   - DONE handle images and sounds not found
+- TODO warn the user via GUI too if config file writing fails
+- TODO embed button image and sound effect into script
+- TODO package standalone for OSs
+	- TODO exe
+	- TODO MacOS
+	- TODO Linux
